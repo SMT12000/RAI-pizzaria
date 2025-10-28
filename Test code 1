@@ -1,0 +1,141 @@
+#include <Servo.h>
+#include <Wire.h>
+#include <VL53L0X.h>
+
+const int IN1 = 2;
+const int IN2 = 3;
+const int IN3 = 4;
+const int IN4 = 5;
+const int ENA = 9;
+const int ENB = 10;
+const int SERVO_PIN = 6;
+
+const int OPEN_ANGLE = 0;
+const int CLOSED_ANGLE = 90;
+
+const int WALL_THRESHOLD = 100;
+const int OPEN_THRESHOLD = 150;
+const int CUBE_DETECT_DIST = 70;
+
+Servo clawServo;
+VL53L0X sensor;
+bool cubePicked = false;
+
+struct SensorData {
+  int front;
+  int right;
+};
+
+int readDistance() {
+  int d = sensor.readRangeSingleMillimeters();
+  if (sensor.timeoutOccurred()) {
+    d = 8190;
+  }
+  return d;
+}
+
+int getDistanceFront() {
+  return readDistance();
+}
+
+int getDistanceRight() {
+  return readDistance();
+}
+
+void updateSensors(struct SensorData *s) {
+  s->front = getDistanceFront();
+  s->right = getDistanceRight();
+}
+
+void stopMotors() {
+  digitalWrite(IN1, LOW);
+  digitalWrite(IN2, LOW);
+  digitalWrite(IN3, LOW);
+  digitalWrite(IN4, LOW);
+  analogWrite(ENA, 0);
+  analogWrite(ENB, 0);
+}
+
+void moveForward(int speed = 200) {
+  digitalWrite(IN1, HIGH);
+  digitalWrite(IN2, LOW);
+  digitalWrite(IN3, HIGH);
+  digitalWrite(IN4, LOW);
+  analogWrite(ENA, speed);
+  analogWrite(ENB, speed);
+}
+
+void turnRight90() {
+  digitalWrite(IN1, HIGH);
+  digitalWrite(IN2, LOW);
+  digitalWrite(IN3, LOW);
+  digitalWrite(IN4, HIGH);
+  analogWrite(ENA, 180);
+  analogWrite(ENB, 180);
+  delay(300);
+  stopMotors();
+}
+
+void turnLeft90() {
+  digitalWrite(IN1, LOW);
+  digitalWrite(IN2, HIGH);
+  digitalWrite(IN3, HIGH);
+  digitalWrite(IN4, LOW);
+  analogWrite(ENA, 180);
+  analogWrite(ENB, 180);
+  delay(300);
+  stopMotors();
+}
+
+void setup() {
+  Serial.begin(9600);
+  int motorPins[6] = {IN1, IN2, IN3, IN4, ENA, ENB};
+  for (int i = 0; i < 6; i++) {
+    pinMode(motorPins[i], OUTPUT);
+  }
+
+  clawServo.attach(SERVO_PIN);
+  clawServo.write(OPEN_ANGLE);
+  delay(500);
+
+  Wire.begin();
+  sensor.init();
+  sensor.setTimeout(500);
+  sensor.startContinuous();
+
+  delay(2000);
+}
+
+void loop() {
+  SensorData dist;
+  updateSensors(&dist);
+
+  if (!cubePicked && dist.front <= CUBE_DETECT_DIST) {
+    stopMotors();
+    clawServo.write(CLOSED_ANGLE);
+    delay(1000);
+    cubePicked = true;
+  } else {
+    if (dist.right >= OPEN_THRESHOLD && dist.front > WALL_THRESHOLD) {
+      stopMotors();
+      turnRight90();
+    } else if (dist.right < OPEN_THRESHOLD && dist.front <= WALL_THRESHOLD) {
+      stopMotors();
+      turnLeft90();
+      SensorData newDist;
+      updateSensors(&newDist);
+      if (newDist.front <= WALL_THRESHOLD) {
+        turnLeft90();
+      }
+    } else if (dist.right >= OPEN_THRESHOLD && dist.front <= WALL_THRESHOLD) {
+      stopMotors();
+      turnLeft90();
+    } else {
+      moveForward();
+    }
+  }
+
+  delay(50);
+}
+
+ 
