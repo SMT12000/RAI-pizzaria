@@ -1,0 +1,139 @@
+#define FRONT 0
+#define LEFT  1
+#define RIGHT 2
+
+#define DIS 7
+
+struct SensorData {
+  long dist[3];
+};
+
+const int trigPins[3] = {6, 10, 8};
+const int echoPins[3] = {7, 11, 9};
+
+const int in1 = 2;
+const int in2 = 3;
+const int in3 = 4;
+const int in4 = 5;
+
+long readDistance(int trigPin, int echoPin);
+void readSensors(struct SensorData *s);
+void decideMove(struct SensorData *s);
+void forward();
+void turn_left();
+void turn_right();
+void reverse();
+void stop();
+
+void setup() {
+  for (int i = 0; i < 3; i++) {
+    pinMode(trigPins[i], OUTPUT);
+    pinMode(echoPins[i], INPUT);
+  }
+
+  pinMode(in1, OUTPUT);
+  pinMode(in2, OUTPUT);
+  pinMode(in3, OUTPUT);
+  pinMode(in4, OUTPUT);
+}
+
+void loop() {
+  struct SensorData s;
+  readSensors(&s);
+  decideMove(&s);
+}
+
+long readDistance(int trigPin, int echoPin) {
+  long dur;
+  digitalWrite(trigPin, LOW);
+  delayMicroseconds(2);
+  digitalWrite(trigPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trigPin, LOW);
+  dur = pulseIn(echoPin, HIGH);
+  return dur / 58;
+}
+
+void readSensors(struct SensorData *s) {
+  for (int i = 0; i < 3; i++) {
+    s->dist[i] = readDistance(trigPins[i], echoPins[i]);
+  }
+}
+
+void decideMove(struct SensorData *s) {
+  long f = s->dist[FRONT];
+  long l = s->dist[LEFT];
+  long r = s->dist[RIGHT];
+
+  if (f > DIS && r > DIS && l > DIS) {
+    forward();
+  }
+  else if (f < DIS && r < DIS && l < DIS) {
+    reverse();
+    delay(500);
+    if (l > r) {
+      turn_left();
+    } else {
+      turn_right();
+    }
+  }
+  else if (f < DIS && r < DIS && l > DIS) {
+    turn_left();
+  }
+  else if (f < DIS && r > DIS && l < DIS) {
+    turn_right();
+  }
+  else if (f < DIS && r > DIS && l > DIS) {
+    turn_left();
+    delay(500);
+    forward();
+  }
+  else if (f > DIS && r > DIS && l < DIS) {
+    turn_right();
+    delay(500);
+    forward();
+  }
+  else if (f > DIS && r < DIS && l > DIS) {
+    turn_left();
+    delay(500);
+    forward();
+  }
+  else {
+    forward();
+  }
+}
+
+void forward() {
+  digitalWrite(in1, HIGH);
+  digitalWrite(in2, LOW);
+  digitalWrite(in3, HIGH);
+  digitalWrite(in4, LOW);
+}
+
+void turn_left() {
+  digitalWrite(in1, HIGH);
+  digitalWrite(in2, LOW);
+  digitalWrite(in3, LOW);
+  digitalWrite(in4, HIGH);
+}
+
+void turn_right() {
+  digitalWrite(in1, LOW);
+  digitalWrite(in2, HIGH);
+  digitalWrite(in3, HIGH);
+  digitalWrite(in4, LOW);
+}
+
+void reverse() {
+  digitalWrite(in1, LOW);
+  digitalWrite(in2, HIGH);
+  digitalWrite(in3, LOW);
+  digitalWrite(in4, HIGH);
+}
+
+void stop() {
+  digitalWrite(in1, LOW);
+  digitalWrite(in2, LOW);
+  digitalWrite(in3, LOW);
+  digitalWrite(in4, LOW);
+}
