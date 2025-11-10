@@ -1,0 +1,117 @@
+import mbot2
+import time
+import gamepad
+from cyberpi import console
+
+console.println("start")
+
+MAX_DRIVE_SPEED = 100
+
+SERVO_ARM_PORT  = "S1"
+SERVO_GRIP_PORT = "S2"
+
+ARM_LOWER_LIMIT   = 0
+ARM_UPPER_LIMIT   = 180
+GRIP_OPEN_ANGLE   = 0
+GRIP_CLOSED_ANGLE = 180
+
+ARM_STEP        = 4.5
+GRIP_BASE_SPEED = 6
+
+# initial servo states
+arm_angle   = ARM_LOWER_LIMIT
+grip_angle  = GRIP_OPEN_ANGLE
+grip_target = grip_angle
+
+def clamp(value, low, high):
+    if value < low:
+        return low
+    if value > high:
+        return high
+    return value
+
+
+def drive_tank_mode():
+    """Tank-style drive with both joysticks."""
+    ry = gamepad.get_joystick("Ry")
+    ly = gamepad.get_joystick("Ly")
+
+    if ry is None:
+        ry = 0
+    if ly is None:
+        ly = 0
+
+    left_motor  = ly * MAX_DRIVE_SPEED
+    right_motor = -ry * MAX_DRIVE_SPEED
+
+    mbot2.drive_power(left_motor, right_motor)
+
+
+def update_arm_and_gripper():
+    """Button-based arm + smooth gripper control."""
+    global arm_angle, grip_angle, grip_target
+
+    # ------------ Arm movement ------------
+    if gamepad.is_key_pressed("Up"):
+        arm_angle -= ARM_STEP
+    elif gamepad.is_key_pressed("Down"):
+        arm_angle += ARM_STEP
+
+    arm_angle = clamp(arm_angle, ARM_LOWER_LIMIT, ARM_UPPER_LIMIT)
+    mbot2.servo_set(arm_angle, SERVO_ARM_PORT)
+
+    # ------------ Gripper target change ------------
+    if gamepad.is_key_pressed("N4"):
+        grip_target = GRIP_CLOSED_ANGLE
+    elif gamepad.is_key_pressed("N1"):
+        grip_target = GRIP_OPEN_ANGLE
+
+    # ------------ Smooth gripper motion ------------
+    delta = grip_target - grip_angle
+    if abs(delta) > 1:
+        step = delta * 0.2
+        step = clamp(step, -GRIP_BASE_SPEED, GRIP_BASE_SPEED)
+        grip_angle += step
+    else:
+        grip_angle = grip_target
+
+    mbot2.servo_set(grip_angle, SERVO_GRIP_PORT)
+
+
+def run_launcher_once(power_fwd=100, power_rev=-50, t_fwd=0.5, t_rev=0.4):
+    """Single launch cycle for M1 & M2."""
+    console.println("LAUNCHING")
+    # spin forward
+    mbot2.motor_set(power_fwd, "M1")
+    mbot2.motor_set(power_fwd, "M2")
+    time.sleep(t_fwd)
+
+    # stop
+    mbot2.motor_set(0, "M1")
+    mbot2.motor_set(0, "M2")
+
+    # short reverse to reset
+    mbot2.motor_set(power_rev, "M1")
+    mbot2.motor_set(power_rev, "M2")
+    time.sleep(t_rev)
+
+    # final stop
+    mbot2.motor_set(0, "M1")
+    mbot2.motor_set(0, "M2")
+
+
+def launcher_control():
+    """Check button and trigger launcher."""
+    if gamepad.is_key_pressed("L1"):
+        run_launcher_once()
+
+
+mbot2.servo_set(arm_angle, SERVO_ARM_PORT)
+mbot2.servo_set(grip_angle, SERVO_GRIP_PORT)
+time.sleep(1)
+
+while True:
+    drive_tank_mode()
+    update_arm_and_gripper()
+    launcher_control()
+    time.sleep(0.02)
